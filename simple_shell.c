@@ -212,6 +212,19 @@ int execute(char **args)
 	}
 
 	// Otherwise
+	char *new_args[MAX_LEN];
+	while (args[i] != NULL) 
+	{	
+		if ((strcmp(args[j], ">") == 0) || (strcmp(args[j], "<") == 0) || (strcmp(args[j], "&") == 0)) {
+			break;
+		}
+
+		new_args[j] = args[j];
+		++j;
+	}
+
+
+	i = 0;
 	while (args[i] != NULL && runBackground == 0)
 	{
 		if ((strcmp(args[i], "&") == 0) && (i == commandSize - 1)) {
@@ -230,7 +243,7 @@ int execute(char **args)
 				return -1;
 			}
 
-			outputRedirect(args, args[2]);
+			outputRedirect(new_args, args[i + 1]);
 			return 1;
 		}
 		else if (strcmp(args[i], "<") == 0)
@@ -246,14 +259,14 @@ int execute(char **args)
 				return -1;
 			}
 
-			inputRedirect(args, args[2]);
+			inputRedirect(new_args, args[i + 1]);
 			return 1;
 		}
 
 		i++;
 	}
 
-	return launchProgram(args, runBackground);
+	return launchProgram(new_args, runBackground);
 }
 
 void mainLoop()
