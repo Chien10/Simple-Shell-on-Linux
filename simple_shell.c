@@ -68,20 +68,25 @@ char **splitLine(char *userCommand)
 	return tokens;
 }
 
-int launchProgram(char **args)
+int launchProgram(char **args, int runBackground)
 {
 	signed int pid, wpid; // pid is process ID
 	int status = 0;
+	int startLoc;
 
 	pid = fork();
 	// The parent process will return 0 to its child one if the children takes the first
+	// In other words, fork() will clone the parent program and the child process will 
+	// have pid = 0 (Both processes will run concurrently). The condition below checks if the process running is child
 	if (pid == 0)
 	{	
 		// The first arg is the name of the program and let the OS search for it
 		// The latter arg is an array of string arguments
 		int status = execvp(args[0], args);
-		if (status == -1) {
+		if (status == -1) 
+		{
 			perror("Invalid Command.\n");
+			kill(getid(), SIGTERM);
 		}
 		exit(EXIT_FAILURE);
 	}
@@ -89,15 +94,18 @@ int launchProgram(char **args)
 		perror("forking Failed.\n");
 	}
 	// fork succeeded
-	else
+	else if (runBackground == 0)
 	{
 		do {
 			// If the command doesn't end with &, the parent process will wait
 			// waitpid waits for a process's state to change
 			// Here, I wait until the parent or the child process exited or killed
 			// If so, the function will return 1
-			wpid = waitpid(pid, &status, WUNTRACED);
-		} while (!WIFEXISTED(status) & !WIFSIGNALED(status));
+			// More about waitpid: https://linux.die.net/man/3/waitpid, https://www.ibm.com/support/knowledgecenter/en/SSLTBW_2.2.0/com.ibm.zos.v2r2.bpxbd00/rtwaip.htm
+			// https://linux.die.net/man/2/waitpid
+			// Actually, returned value of waitpid will be stored in startLoc
+			wpid = waitpid(pid, &startLoc, WUNTRACED);
+		} while (!WIFEXISTED(startLoc) & !WIFSIGNALED(startLoc));
 		/*
 		WIFEXISTED returns non-zero value if the child process terminated normally with exit function
 		WIFSIGNALED returns non-zero value if the child process terminated 'cause it received a signal which 
@@ -123,6 +131,7 @@ int help(char **args)
 }
 
 int quit(char **args) {
+	//exit(0);
 	return 0;
 }
 
@@ -132,11 +141,58 @@ int numBuiltins() {
 	return sizeof builtinCommands / sizeof(char *);
 }
 
+void outputRedirect(char *args[], char *outputFile)
+{
+	int fd, status;
+	signed int pid;
+
+	pid = fork();
+	if (pid == 0)
+	{
+		fd = open(outputFile, O_CREAT | O_TRUNC | O_WRONLY, 600);
+		dup2(fd, STDOUT_FILENO);
+		close(fd);
+
+		status = execvp(args[0], args);
+		if (status == -1)
+		{
+			perror("Invalid command.\n");
+			// A gentleman way to kill a process
+			kill(getid(), SIGTERM);
+		}
+	}
+	// Since start_loc is NULL, waitpid waits without caring about the child's return values
+	waitpid(pid, NULL, 0);
+}
+
+void outputRedirect(char *args[], char *inputFile)
+{
+	int fd, status;
+	signed int pid;
+
+	pid = fork();
+	if (pid == 0)
+	{
+		fd = open(inputFile, O_RDONLY, 0600);
+		dup2(fd, STDIN_FILENO);
+		close(fd);
+
+		status = execvp(args[0], args);
+		if (status == -1)
+		{
+			perror("Invalid command.\n");
+			// A gentleman way to kill a process
+			kill(getid(), SIGTERM);
+		}
+	}
+
+	waitpid(pid, NULL, 0);
+}
 
 int execute(char **args)
 {
-	int i = 0, background = 0;
-	int j = 1, fd, stdOutCopy;
+	int i = 0, runBackground = 0;
+	int commandSize = sizeof args / sizeof(char*);
 
 	// If a command entered is empty
 	if (args[0] == NULL) {
@@ -151,17 +207,48 @@ int execute(char **args)
 		}
 	}
 
-	i = 0;
-	while (args[i] != NULL && background == 0)
+	// Otherwise
+	while (args[i] != NULL && runBackground == 0)
 	{
-		if (strcmp(args[i], "&") == 0) {
+		if ((strcmp(args[i], "&") == 0) && (i == commandSize - 1)) {
 			background = 1;
 		}
 		else if (strcmp(args[i], ">") == 0)
 		{
-			if (args[])
+			if (args[i + 1] == NULL) 
+			{
+				printf("Missed output source.\n");
+				return -1;
+			}
+			else if ((i == 0) || (i > 0 && args[i - 1] == NULL))
+			{
+				print("Missed action before output redirection.\n");
+				return -1;
+			}
+
+			outputRedirect(args, outputFile);
+			return 1;
 		}
+		else if (strcmp(args[i], "<") == 0)
+		{
+			if ((i > 0 && args[i - 1] == NULL) || (i == 0))
+			{
+				printf("Missed action after input redirection.\n");
+				return -1;
+			}
+			else if (args[i + 1] == NULL)
+			{
+				printf("Missed input source.\n");
+				return -1;
+			}
+
+			inputRedirect(args, outputFile);
+			return 1;
+		}
+
+		i++;
 	}
+
 	return launchProgram(args);
 }
 
