@@ -79,8 +79,9 @@ int launchProgram(char **args)
 	{	
 		// The first arg is the name of the program and let the OS search for it
 		// The latter arg is an array of string arguments
-		if (execvp(args[0], args) == -1) {
-			perror("pid <> 0.\n");
+		int status = execvp(args[0], args);
+		if (status == -1) {
+			perror("Invalid Command.\n");
 		}
 		exit(EXIT_FAILURE);
 	}
@@ -91,6 +92,7 @@ int launchProgram(char **args)
 	else
 	{
 		do {
+			// If the command doesn't end with &, the parent process will wait
 			// waitpid waits for a process's state to change
 			// Here, I wait until the parent or the child process exited or killed
 			// If so, the function will return 1
@@ -133,7 +135,8 @@ int numBuiltins() {
 
 int execute(char **args)
 {
-	int i = 0;
+	int i = 0, background = 0;
+	int j = 1, fd, stdOutCopy;
 
 	// If a command entered is empty
 	if (args[0] == NULL) {
@@ -144,10 +147,21 @@ int execute(char **args)
 	for (; i < numBuiltins(); i++)
 	{
 		if (strcmp(args[0], builtinCommands[i]) == 0) {
-			return (*builtinCommands[i])(args);
+			return (*builtinFunctions[i])(args);
 		}
 	}
 
+	i = 0;
+	while (args[i] != NULL && background == 0)
+	{
+		if (strcmp(args[i], "&") == 0) {
+			background = 1;
+		}
+		else if (strcmp(args[i], ">") == 0)
+		{
+			if (args[])
+		}
+	}
 	return launchProgram(args);
 }
 
