@@ -34,7 +34,7 @@ char *readLine()
 char **splitLine(char *userCommand)
 {
 	int bufSize = TOKEN_SIZE, pos = 0;
-	char **tokens = (char*)malloc(bufSize * sizeof(char*));
+	char **tokens = (char**)malloc(bufSize * sizeof(char*));
 	if(!tokens)
 	{
 		printf("Error in splitLine: Failed to allocate tokens.\n");
@@ -70,7 +70,7 @@ char **splitLine(char *userCommand)
 
 int launchProgram(char **args)
 {
-	signed int pid, wpic; // pid is process ID
+	signed int pid, wpid; // pid is process ID
 	int status = 0;
 
 	pid = fork();
@@ -105,20 +105,14 @@ int launchProgram(char **args)
 }
 
 // Built-in commands for the shell
-char *builtinCommands[] = {"help", "exit"};
-int (*builtinFunctions[]) (char**) = {&help, &exit};
-int numBuiltins() {
-	return sizeof builtinCommands / sizeof(char *);
-}
-
 int help(char **args)
 {
 	int i;
 
 	printf("\t-----A Shell implemented by Minh Chien and Thanh Dat-----\n");
-	printf("Features support by this shell:\n");
-	print("\t1. Type '&' at the end of your command to run concurrently.\n")
-	printf("\t2. Type '!!' at the beginning of your command to execute the most current command.\n")
+	printf("Features supported by this shell:\n");
+	print("\t1. Type '&' at the end of your command to run concurrently.\n");
+	printf("\t2. Type '!!' at the beginning of your command to execute the most current command.\n");
 	printf("\t You'll may receive 'No command in history' response.\n");
 	printf("\t3. Using '>' or '<' to redirect I/O.\n");
 	printf("\t4. Using '|' to pipe.\n");
@@ -126,11 +120,18 @@ int help(char **args)
 	return 1;
 }
 
-int exit(char **args) {
-	return 1;
+int quit(char **args) {
+	return 0;
 }
 
-int execute(char **agrs)
+char *builtinCommands[] = {"help", "exit"};
+int (*builtinFunctions[]) (char**) = {&help, &quit};
+int numBuiltins() {
+	return sizeof builtinCommands / sizeof(char *);
+}
+
+
+int execute(char **args)
 {
 	int i = 0;
 
@@ -164,7 +165,7 @@ void mainLoop()
 
 	do
 	{
-		printf("Type 'help' if you need any helps.\n");
+		printf("Type help if you need any helps.\n");
 		printf("> ");
 
 		line = readLine()
@@ -180,7 +181,7 @@ int main(int argc, char **argv)
 {
 	// Load config files (optional)
 
-	main_loop();
+	mainLoop();
 
 	// Perform any shutdown/ cleanup
 
