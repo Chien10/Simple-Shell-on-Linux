@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,7 +66,7 @@ char **splitLine(char *userCommand)
 	}
 
 	tokens[pos] = NULL;
-	
+
 	return tokens;
 }
 
@@ -76,17 +78,17 @@ int launchProgram(char **args, int runBackground)
 
 	pid = fork();
 	// The parent process will return 0 to its child one if the children takes the first
-	// In other words, fork() will clone the parent program and the child process will 
+	// In other words, fork() will clone the parent program and the child process will
 	// have pid = 0 (Both processes will run concurrently). The condition below checks if the process running is child
 	if (pid == 0)
-	{	
+	{
 		// The first arg is the name of the program and let the OS search for it
 		// The latter arg is an array of string arguments
 		int status = execvp(args[0], args);
-		if (status == -1) 
+		if (status == -1)
 		{
 			perror("Invalid Command.\n");
-			kill(getid(), SIGTERM);
+			kill(getpid(), SIGTERM);
 		}
 		exit(EXIT_FAILURE);
 	}
@@ -105,13 +107,15 @@ int launchProgram(char **args, int runBackground)
 			// https://linux.die.net/man/2/waitpid
 			// Actually, returned value of waitpid will be stored in startLoc
 			wpid = waitpid(pid, &startLoc, WUNTRACED);
-		} while (!WIFEXISTED(startLoc) & !WIFSIGNALED(startLoc));
+		} while (!WIFEXITED(startLoc) & !WIFSIGNALED(startLoc));
 		/*
 		WIFEXISTED returns non-zero value if the child process terminated normally with exit function
-		WIFSIGNALED returns non-zero value if the child process terminated 'cause it received a signal which 
-					was not handled. More about signal: https://www.gnu.org/software/libc/manual/html_node/Signal-Handling.html#Signal-Handling 
+		WIFSIGNALED returns non-zero value if the child process terminated 'cause it received a signal which
+					was not handled. More about signal: https://www.gnu.org/software/libc/manual/html_node/Signal-Handling.html#Signal-Handling
 		*/
 	}
+
+	return 1;
 }
 
 // Built-in commands for the shell
@@ -121,7 +125,7 @@ int help(char **args)
 
 	printf("\t-----A Shell implemented by Minh Chien and Thanh Dat-----\n");
 	printf("Features supported by this shell:\n");
-	print("\t1. Type '&' at the end of your command to run concurrently.\n");
+	printf("\t1. Type '&' at the end of your command to run concurrently.\n");
 	printf("\t2. Type '!!' at the beginning of your command to execute the most current command.\n");
 	printf("\t You'll may receive 'No command in history' response.\n");
 	printf("\t3. Using '>' or '<' to redirect I/O.\n");
@@ -158,14 +162,14 @@ void outputRedirect(char *args[], char *outputFile)
 		{
 			perror("Invalid command.\n");
 			// A gentleman way to kill a process
-			kill(getid(), SIGTERM);
+			kill(getpid(), SIGTERM);
 		}
 	}
 	// Since start_loc is NULL, waitpid waits without caring about the child's return values
 	waitpid(pid, NULL, 0);
 }
 
-void outputRedirect(char *args[], char *inputFile)
+void inputRedirect(char *args[], char *inputFile)
 {
 	int fd, status;
 	signed int pid;
@@ -182,7 +186,7 @@ void outputRedirect(char *args[], char *inputFile)
 		{
 			perror("Invalid command.\n");
 			// A gentleman way to kill a process
-			kill(getid(), SIGTERM);
+			kill(getpid(), SIGTERM);
 		}
 	}
 
@@ -197,7 +201,7 @@ int execute(char **args)
 	// If a command entered is empty
 	if (args[0] == NULL) {
 		return 1;
-	}	
+	}
 
 	// If user typed built-in commands
 	for (; i < numBuiltins(); i++)
@@ -211,22 +215,22 @@ int execute(char **args)
 	while (args[i] != NULL && runBackground == 0)
 	{
 		if ((strcmp(args[i], "&") == 0) && (i == commandSize - 1)) {
-			background = 1;
+			runBackground = 1;
 		}
 		else if (strcmp(args[i], ">") == 0)
 		{
-			if (args[i + 1] == NULL) 
+			if (args[i + 1] == NULL)
 			{
 				printf("Missed output source.\n");
 				return -1;
 			}
 			else if ((i == 0) || (i > 0 && args[i - 1] == NULL))
 			{
-				print("Missed action before output redirection.\n");
+				printf("Missed action before output redirection.\n");
 				return -1;
 			}
 
-			outputRedirect(args, outputFile);
+			outputRedirect(args, args[2]);
 			return 1;
 		}
 		else if (strcmp(args[i], "<") == 0)
@@ -242,14 +246,14 @@ int execute(char **args)
 				return -1;
 			}
 
-			inputRedirect(args, outputFile);
+			inputRedirect(args, args[2]);
 			return 1;
 		}
 
 		i++;
 	}
 
-	return launchProgram(args);
+	return launchProgram(args, runBackground);
 }
 
 void mainLoop()
@@ -269,7 +273,7 @@ void mainLoop()
 		printf("Type help if you need any helps.\n");
 		printf("> ");
 
-		line = readLine()
+		line = readLine();
 		args = splitLine(line);
 		shouldRun = execute(args);
 
