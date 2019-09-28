@@ -2,6 +2,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +10,8 @@
 #define MAX_LEN 1024
 #define TOKEN_SIZE 80
 #define TOKEN_DELIM " \t\r\n\a"
+
+
 
 /*
 	Read user's command
@@ -84,6 +87,10 @@ int launchProgram(char **args, int runBackground)
 	{
 		// The first arg is the name of the program and let the OS search for it
 		// The latter arg is an array of string arguments
+
+		// Tell the child process to ignore SIGINT
+		signal(SIGINT, SIG_IGN);
+		
 		int status = execvp(args[0], args);
 		if (status == -1)
 		{
@@ -95,8 +102,8 @@ int launchProgram(char **args, int runBackground)
 	else if (pid < 0) {
 		perror("forking Failed.\n");
 	}
-	// fork succeeded
-	else if (runBackground == 0)
+	
+	if (runBackground == 0)
 	{
 		do {
 			// If the command doesn't end with &, the parent process will wait
@@ -135,7 +142,6 @@ int help(char **args)
 }
 
 int quit(char **args) {
-	//exit(0);
 	return 0;
 }
 
@@ -213,18 +219,17 @@ int execute(char **args)
 
 	// Otherwise
 	char *new_args[MAX_LEN];
-	while (args[i] != NULL) 
-	{	
-		if ((strcmp(args[j], ">") == 0) || (strcmp(args[j], "<") == 0) || (strcmp(args[j], "&") == 0)) {
+	i = 0;
+	while (args[i] != NULL)
+	{
+		if ((strcmp(args[i], ">") == 0) || (strcmp(args[i], "<") == 0)
+					|| (strcmp(args[i], "&") == 0)) {
 			break;
 		}
 
-		new_args[j] = args[j];
-		++j;
+		new_args[i++] = args[i++];
 	}
 
-
-	i = 0;
 	while (args[i] != NULL && runBackground == 0)
 	{
 		if ((strcmp(args[i], "&") == 0) && (i == commandSize - 1)) {
@@ -266,6 +271,7 @@ int execute(char **args)
 		i++;
 	}
 
+	new_args[i] = NULL;
 	return launchProgram(new_args, runBackground);
 }
 
