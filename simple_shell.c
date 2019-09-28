@@ -90,7 +90,7 @@ int launchProgram(char **args, int runBackground)
 
 		// Tell the child process to ignore SIGINT
 		signal(SIGINT, SIG_IGN);
-		
+
 		int status = execvp(args[0], args);
 		if (status == -1)
 		{
@@ -102,7 +102,7 @@ int launchProgram(char **args, int runBackground)
 	else if (pid < 0) {
 		perror("forking Failed.\n");
 	}
-	
+
 	if (runBackground == 0)
 	{
 		do {
@@ -159,7 +159,9 @@ void outputRedirect(char *args[], char *outputFile)
 	pid = fork();
 	if (pid == 0)
 	{
-		fd = open(outputFile, O_CREAT | O_TRUNC | O_WRONLY, 600);
+		// https://linux.die.net/man/3/open
+		// 
+		fd = open(outputFile, O_CREAT | O_TRUNC | O_RDWR, 600);
 		dup2(fd, STDOUT_FILENO);
 		close(fd);
 
@@ -183,7 +185,7 @@ void inputRedirect(char *args[], char *inputFile)
 	pid = fork();
 	if (pid == 0)
 	{
-		fd = open(inputFile, O_RDONLY, 0600);
+		fd = open(inputFile, O_RDWR, 0600);
 		dup2(fd, STDIN_FILENO);
 		close(fd);
 
@@ -227,9 +229,11 @@ int execute(char **args)
 			break;
 		}
 
-		new_args[i++] = args[i++];
+		new_args[i] = args[i];
+		i++;
 	}
 
+	i = 0;
 	while (args[i] != NULL && runBackground == 0)
 	{
 		if ((strcmp(args[i], "&") == 0) && (i == commandSize - 1)) {
@@ -248,7 +252,9 @@ int execute(char **args)
 				return -1;
 			}
 
-			outputRedirect(new_args, args[i + 1]);
+			new_args[i + 1] = args[i + 1];
+			new_args[i + 2] = NULL;
+			outputRedirect(new_args, new_args[i + 1]);
 			return 1;
 		}
 		else if (strcmp(args[i], "<") == 0)
