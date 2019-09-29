@@ -218,7 +218,7 @@ int execute(char **args)
 	}
 
 	// Otherwise
-	char *new_args[MAX_LEN];
+	char *new_args[5];
 	i = 0;
 	while (args[i] != NULL)
 	{
