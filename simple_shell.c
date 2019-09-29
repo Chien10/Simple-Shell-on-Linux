@@ -161,16 +161,25 @@ void outputRedirect(char *args[], char *outputFile)
 	{
 		// https://linux.die.net/man/3/open
 		// 
-		fd = open(outputFile, O_CREAT | O_TRUNC | O_RDWR, 600);
-		dup2(fd, STDOUT_FILENO);
-		close(fd);
-
-		status = execvp(args[0], args);
-		if (status == -1)
+		mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+		fd = open(outputFile, O_CREAT | O_TRUNC | O_RDWR, mode);
+		if (fd < 0)
 		{
-			perror("Invalid command.\n");
-			// A gentleman way to kill a process
+			perror("Open file to write failed.\n");
 			kill(getpid(), SIGTERM);
+		}
+		else 
+		{
+			dup2(fd, STDOUT_FILENO);
+			close(fd);
+
+			status = execvp(args[0], args);
+			if (status == -1)
+			{
+				perror("Invalid command.\n");
+				// A gentleman way to kill a process
+				kill(getpid(), SIGTERM);
+			}
 		}
 	}
 	// Since start_loc is NULL, waitpid waits without caring about the child's return values
@@ -186,15 +195,23 @@ void inputRedirect(char *args[], char *inputFile)
 	if (pid == 0)
 	{
 		fd = open(inputFile, O_RDWR, 0600);
-		dup2(fd, STDIN_FILENO);
-		close(fd);
-
-		status = execvp(args[0], args);
-		if (status == -1)
+		if (fd < 0)
 		{
-			perror("Invalid command.\n");
-			// A gentleman way to kill a process
+			perror("Open file to read failed.\n");
 			kill(getpid(), SIGTERM);
+		}
+		else
+		{
+			dup2(fd, STDIN_FILENO);
+			close(fd);
+
+			status = execvp(args[0], args);
+			if (status == -1)
+			{
+				perror("Invalid command.\n");
+				// A gentleman way to kill a process
+				kill(getpid(), SIGTERM);
+			}
 		}
 	}
 
