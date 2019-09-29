@@ -10,8 +10,7 @@
 #define MAX_LEN 1024
 #define TOKEN_SIZE 80
 #define TOKEN_DELIM " \t\r\n\a"
-
-
+#define MAX_LEN_COMMAND 5
 
 /*
 	Read user's command
@@ -45,7 +44,6 @@ char **splitLine(char *userCommand)
 		printf("Error in splitLine: Failed to allocate tokens.\n");
 		return NULL;
 	}
-
 
 	char *token = NULL;
 	token = strtok(userCommand, TOKEN_DELIM);
@@ -88,8 +86,13 @@ int launchProgram(char **args, int runBackground)
 		// The first arg is the name of the program and let the OS search for it
 		// The latter arg is an array of string arguments
 
-		// Tell the child process to ignore SIGINT
+		// Tell the child process to ignore signals
 		signal(SIGINT, SIG_IGN);
+		signal(SIGQUIT, SIG_IGN);
+		signal(SIGTSTP, SIG_IGN);
+		signal(SIGTTIN, SIG_IGN);
+		signal(SIGTTOU, SIG_IGN);
+		signal(SIGCHLD, SIG_IGN);
 
 		int status = execvp(args[0], args);
 		if (status == -1)
@@ -160,15 +163,15 @@ void outputRedirect(char *args[], char *outputFile)
 	if (pid == 0)
 	{
 		// https://linux.die.net/man/3/open
-		// 
-		mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+		//
+		mode_t mode = S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR;
 		fd = open(outputFile, O_CREAT | O_TRUNC | O_RDWR, mode);
 		if (fd < 0)
 		{
-			perror("Open file to write failed.\n");
+			perror("open file for output redirection failed.");
 			kill(getpid(), SIGTERM);
 		}
-		else 
+		else
 		{
 			dup2(fd, STDOUT_FILENO);
 			close(fd);
@@ -197,7 +200,7 @@ void inputRedirect(char *args[], char *inputFile)
 		fd = open(inputFile, O_RDWR, 0600);
 		if (fd < 0)
 		{
-			perror("Open file to read failed.\n");
+			printf("Failed to open file for input redirection.\n");
 			kill(getpid(), SIGTERM);
 		}
 		else
@@ -221,7 +224,14 @@ void inputRedirect(char *args[], char *inputFile)
 int execute(char **args)
 {
 	int i = 0, runBackground = 0;
-	int commandSize = sizeof args / sizeof(char*);
+
+	int commandSize = 0;
+	for(; args[i] != NULL; i++) {
+		commandSize++;
+	}
+
+	char *latestCommand[MAX_LEN_COMMAND];
+	int latestComExist = 0;
 
 	// If a command entered is empty
 	if (args[0] == NULL) {
@@ -237,23 +247,35 @@ int execute(char **args)
 	}
 
 	// Otherwise
-	char *new_args[5];
-	i = 0;
-	while (args[i] != NULL)
+	char *new_args[MAX_LEN_COMMAND];
+	for (i = 0; args[i] != NULL; i++)
 	{
-		if ((strcmp(args[i], ">") == 0) || (strcmp(args[i], "<") == 0)
-					|| (strcmp(args[i], "&") == 0)) {
-			break;
-		}
-
+		if (strcmp(args[i], ">") == 0 ||
+				strcmp(args[i], "<") == 0 ||
+				strcmp(args[i], "&") == 0) {
+					break;
+				}
 		new_args[i] = args[i];
-		i++;
 	}
+	new_args[i] = NULL;
 
 	i = 0;
 	while (args[i] != NULL && runBackground == 0)
 	{
-		if ((strcmp(args[i], "&") == 0) && (i == commandSize - 1)) {
+		if (strcmp(args[i], "!!") == 0)
+		{
+			if (latestComExist == 0)
+			{
+				printf("You haven't type any commands yet!.\n");
+				return 1;
+			}
+			else
+			{
+				launchProgram(latestCommand, runBackground);
+				return 1;
+			}
+		}
+		else if ((strcmp(args[i], "&") == 0) && (i == commandSize - 1)) {
 			runBackground = 1;
 		}
 		else if (strcmp(args[i], ">") == 0)
@@ -269,9 +291,7 @@ int execute(char **args)
 				return -1;
 			}
 
-			new_args[i + 1] = args[i + 1];
-			new_args[i + 2] = NULL;
-			outputRedirect(new_args, new_args[i + 1]);
+			outputRedirect(new_args, args[i + 1]);
 			return 1;
 		}
 		else if (strcmp(args[i], "<") == 0)
@@ -294,7 +314,6 @@ int execute(char **args)
 		i++;
 	}
 
-	new_args[i] = NULL;
 	return launchProgram(new_args, runBackground);
 }
 
