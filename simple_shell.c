@@ -221,7 +221,7 @@ void inputRedirect(char *args[], char *inputFile)
 	waitpid(pid, NULL, 0);
 }
 
-int execute(char **args)
+int execute(char **args, int latestCommandExist)
 {
 	int i = 0, runBackground = 0;
 
@@ -229,9 +229,6 @@ int execute(char **args)
 	for(; args[i] != NULL; i++) {
 		commandSize++;
 	}
-
-	char *latestCommand[MAX_LEN_COMMAND];
-	int latestComExist = 0;
 
 	// If a command entered is empty
 	if (args[0] == NULL) {
@@ -264,14 +261,27 @@ int execute(char **args)
 	{
 		if (strcmp(args[i], "!!") == 0)
 		{
-			if (latestComExist == 0)
+			if (latestCommandExist == 0)
 			{
 				printf("You haven't type any commands yet!.\n");
 				return 1;
 			}
 			else
 			{
-				launchProgram(latestCommand, runBackground);
+				int fd = open("history.txt", O_RDWR, S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
+				if (fd < 0) 
+				{
+					printf("Failed to load latest command.\n");
+					return -1;
+				}
+				else
+				{
+					char *latestCommand[MAX_LEN_COMMAND];
+					read(fd, latestCommand, MAX_LEN_COMMAND);
+
+					int exec = execute(latestCommand, &latestCommandExist);
+				}
+
 				return 1;
 			}
 		}
@@ -317,6 +327,47 @@ int execute(char **args)
 	return launchProgram(new_args, runBackground);
 }
 
+int initShell()
+{
+	/*
+		Necessary initialization for the shell
+	*/
+	int history;
+	history = open("history.txt", O_CREAT | O_APPEND | O_RDWR, S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
+	if (history < 0)
+	{
+		printf("Failed to initialize shell.\n");
+		return -1;
+	}
+	else {
+		close(history);
+	}
+
+	return 0;
+}
+
+void saveCommandToHistory(char **args, int *latestCommandExist)
+{
+	int fd = open("history.txt", O_APPEND, S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
+
+	int commandSize = 0;
+	for(; args[i] != NULL; i++) {
+		commandSize++;
+	}
+
+	if (args[0] != NULL) {
+		write(fd, args, (ssize_t) commandSize);
+	}
+
+	// Check if history.txt is empty
+	fseek(fd, 0, SEEK_END);	
+	if (ftell(fd) == 0) {
+		*latestCommandExist = 0;
+	}
+
+	close(fd);
+}
+
 void mainLoop()
 {
 	/*
@@ -329,6 +380,13 @@ void mainLoop()
 	char **args;
 	int shouldRun;
 
+	int latestCommandExist = initShell();
+	if (latestCommandExist == -1) 
+	{
+		printf("Cannot open shell.\n");
+		return;
+	}
+
 	do
 	{
 		printf("Type help if you need any helps.\n");
@@ -338,8 +396,12 @@ void mainLoop()
 		args = splitLine(line);
 		shouldRun = execute(args);
 
+		// Only save those that have been executed
+		saveCommandToHistory(args, &latestCommandExist);
+
 		free(line);
 		free(args);
+
 	} while(shouldRun);
 }
 
