@@ -221,7 +221,7 @@ void inputRedirect(char *args[], char *inputFile)
 	waitpid(pid, NULL, 0);
 }
 
-int execute(char **args, int latestCommandExist)
+int execute(char **args, int latestCommandExist, char **latestCommand)
 {
 	int i = 0, runBackground = 0;
 
@@ -263,26 +263,20 @@ int execute(char **args, int latestCommandExist)
 		{
 			if (latestCommandExist == 0)
 			{
-				printf("You haven't type any commands yet!.\n");
-				return 1;
+				printf("No commands in history\n");
+				return -1;
 			}
 			else
 			{
-				int fd = open("history.txt", O_RDWR, S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
-				if (fd < 0) 
-				{
-					printf("Failed to load latest command.\n");
-					return -1;
-				}
-				else
-				{
-					char *latestCommand[MAX_LEN_COMMAND];
-					read(fd, latestCommand, MAX_LEN_COMMAND);
-
-					int exec = execute(latestCommand, &latestCommandExist);
+				// Echo the latest command on the shell's screen
+				for(int j = 0; latestCommand[j] != NULL; j++) {
+					printf("%s", latestCommand[j]);
 				}
 
-				return 1;
+				strcpy(args, latestCommand);
+
+				// This function will terminate, don't worry!
+				execute(args, latestCommandExist, latestCommand);
 			}
 		}
 		else if ((strcmp(args[i], "&") == 0) && (i == commandSize - 1)) {
@@ -327,46 +321,6 @@ int execute(char **args, int latestCommandExist)
 	return launchProgram(new_args, runBackground);
 }
 
-int initShell()
-{
-	/*
-		Necessary initialization for the shell
-	*/
-	int history;
-	history = open("history.txt", O_CREAT | O_APPEND | O_RDWR, S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
-	if (history < 0)
-	{
-		printf("Failed to initialize shell.\n");
-		return -1;
-	}
-	else {
-		close(history);
-	}
-
-	return 0;
-}
-
-void saveCommandToHistory(char **args, int *latestCommandExist)
-{
-	int fd = open("history.txt", O_APPEND, S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
-
-	int commandSize = 0;
-	for(; args[i] != NULL; i++) {
-		commandSize++;
-	}
-
-	if (args[0] != NULL) {
-		write(fd, args, (ssize_t) commandSize);
-	}
-
-	// Check if history.txt is empty
-	fseek(fd, 0, SEEK_END);	
-	if (ftell(fd) == 0) {
-		*latestCommandExist = 0;
-	}
-
-	close(fd);
-}
 
 void mainLoop()
 {
@@ -380,12 +334,9 @@ void mainLoop()
 	char **args;
 	int shouldRun;
 
-	int latestCommandExist = initShell();
-	if (latestCommandExist == -1) 
-	{
-		printf("Cannot open shell.\n");
-		return;
-	}
+	int latestCommandExist = 0;
+	char *latestCommand[MAX_LEN_COMMAND];
+	latestCommand[0] = NULL;
 
 	do
 	{
@@ -394,10 +345,14 @@ void mainLoop()
 
 		line = readLine();
 		args = splitLine(line);
-		shouldRun = execute(args);
+		shouldRun = execute(args, latestCommandExist, latestCommand);
 
-		// Only save those that have been executed
-		saveCommandToHistory(args, &latestCommandExist);
+		// Only update latestCommand with the executed command
+		if (args[0] != NULL) 
+		{
+			strcpy(latestCommand, args);
+			latestCommandExist = 1;
+		}
 
 		free(line);
 		free(args);
