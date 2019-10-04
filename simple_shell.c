@@ -154,7 +154,7 @@ int numBuiltins() {
 	return sizeof builtinCommands / sizeof(char *);
 }
 
-void outputRedirect(char *args[], char *outputFile)
+void outputRedirect(char *args[], char *outputFile, int runBackground)
 {
 	int fd, status;
 	signed int pid;
@@ -185,11 +185,17 @@ void outputRedirect(char *args[], char *outputFile)
 			}
 		}
 	}
-	// Since start_loc is NULL, waitpid waits without caring about the child's return values
-	waitpid(pid, NULL, 0);
+
+	if (runBackground == 0)
+	{
+		do {
+			// Or waitpid(pid, NULL, 0) since start_loc is NULL, waitpid waits without caring about the child's return values
+			wpid = waitpid(pid, &startLoc, WUNTRACED);
+		} while (!WIFEXITED(startLoc) & !WIFSIGNALED(startLoc));
+	}
 }
 
-void inputRedirect(char *args[], char *inputFile)
+void inputRedirect(char *args[], char *inputFile, int runBackground)
 {
 	int fd, status;
 	signed int pid;
@@ -218,7 +224,25 @@ void inputRedirect(char *args[], char *inputFile)
 		}
 	}
 
-	waitpid(pid, NULL, 0);
+	if (runBackground == 0)
+	{
+		do {
+			// Or waitpid(pid, NULL, 0);
+			wpid = waitpid(pid, &startLoc, WUNTRACED);
+		} while (!WIFEXITED(startLoc) & !WIFSIGNALED(startLoc));
+	}
+}
+
+int runDefaultUtils(char **args)
+{
+	for (int i = 0; i < numBuiltins(); i++)
+	{
+		if (strcmp(args[0], builtinCommands[i]) == 0) {
+			return (*builtinFunctions[i])(args);
+		}
+	}
+
+	return -1;
 }
 
 int execute(char **args, int latestCommandExist, char **latestCommand)
@@ -236,11 +260,9 @@ int execute(char **args, int latestCommandExist, char **latestCommand)
 	}
 
 	// If user typed built-in commands
-	for (; i < numBuiltins(); i++)
-	{
-		if (strcmp(args[0], builtinCommands[i]) == 0) {
-			return (*builtinFunctions[i])(args);
-		}
+	int isBuiltinUtils = runDefaultUtils(args);
+	if (isBuiltinUtils != -1) {
+		return isBuiltinUtils;
 	}
 
 	// Otherwise
@@ -248,10 +270,11 @@ int execute(char **args, int latestCommandExist, char **latestCommand)
 	for (i = 0; args[i] != NULL; i++)
 	{
 		if (strcmp(args[i], ">") == 0 ||
-				strcmp(args[i], "<") == 0 ||
-				strcmp(args[i], "&") == 0) {
+			strcmp(args[i], "<") == 0 ||
+			strcmp(args[i], "&") == 0) {
 					break;
 				}
+				
 		new_args[i] = args[i];
 	}
 	new_args[i] = NULL;
