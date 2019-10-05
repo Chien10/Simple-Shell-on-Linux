@@ -157,7 +157,7 @@ int numBuiltins() {
 void outputRedirect(char *args[], char *outputFile, int runBackground)
 {
 	int fd, status;
-	signed int pid;
+	signed int pid, wpid;
 	int startLoc;
 
 	pid = fork();
@@ -199,7 +199,7 @@ void outputRedirect(char *args[], char *outputFile, int runBackground)
 void inputRedirect(char *args[], char *inputFile, int runBackground)
 {
 	int fd, status;
-	signed int pid;
+	signed int pid, wpid;
 	int startLoc;
 
 	pid = fork();
@@ -263,7 +263,7 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 	commandAfterPipe[j] = NULL;
 
 	int pipeFds[2];
-	signed int pid;
+	signed int pid, wpid;
 	int startLoc;
 
 	int status = pipe(pipeFds);
@@ -301,7 +301,7 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 		close(pipeFds[1]);
 
 		status = execvp(commandAfterPipe[0], commandAfterPipe);
-		
+
 		if (runBackground == 0)
 		{
 			do {
@@ -374,7 +374,8 @@ int execute(char **args, int latestCommandExist, char **latestCommand)
 				echoCommandToScreen(latestCommand);
 
 				for (int i = 0; args[i] != NULL; i++) {
-					latestCommand[i] = args[i];
+					//latestCommand[i] = args[i];
+					strcpy(latestCommand[i], args[i]);
 				}
 				latestCommand[i] = NULL;
 
@@ -398,9 +399,7 @@ int execute(char **args, int latestCommandExist, char **latestCommand)
 				return -1;
 			}
 
-			if (strcmp(args[i + 2], "&") == 0) {
-				runBackground = 1;
-			}
+
 
 			outputRedirect(new_args, args[i + 1], runBackground);
 			return 1;
@@ -422,10 +421,14 @@ int execute(char **args, int latestCommandExist, char **latestCommand)
 				runBackground = 1;
 			}
 
-			inputRedirect(new_args, args[i + 1]);
+			inputRedirect(new_args, args[i + 1], runBackground);
 			return 1;
 		}
-		else if (strcmp(args[i], "|") == 0) {
+		else if (strcmp(args[i], "|") == 0)
+		{
+			if (strcmp(args[i+2], "&") == 0) {
+				runBackground = 1;
+			}
 			executePipe(args, new_args, i, runBackground);
 		}
 
@@ -449,8 +452,7 @@ void mainLoop()
 	int shouldRun;
 
 	int latestCommandExist = 0;
-	char *latestCommand[MAX_LEN_COMMAND];
-	latestCommand[0] = NULL;
+	char **latestCommand = (char**)malloc(TOKEN_SIZE * sizeof(char*));
 
 	do
 	{
@@ -462,10 +464,12 @@ void mainLoop()
 		shouldRun = execute(args, latestCommandExist, latestCommand);
 
 		// Only update latestCommand with the executed command
-		if (args[0] != NULL) 
+		int i = 0;
+		if (args[0] != NULL)
 		{
-			for (int i = 0; args[i] != NULL; i++) {
-				latestCommand[i] = args[i];
+			for (; args[i] != NULL; i++) {
+				//latestCommand[i] = args[i];
+				strcpy(latestCommand[i], args[i]);
 			}
 			latestCommand[i] = NULL;
 
@@ -476,6 +480,8 @@ void mainLoop()
 		free(args);
 
 	} while(shouldRun);
+
+	free(latestCommand);
 }
 
 int main(int argc, char **argv)
