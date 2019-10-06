@@ -249,29 +249,20 @@ int runDefaultUtils(char **args)
 
 int executePipe(char **args, char **new_args, int i, int runBackground)
 {
-	if (args[i + 1] != NULL)
+	if (args[i + 1] == NULL)
 	{
 		printf("Missed command after pipe.\n");
 		return -1;
 	}
 
 	char *commandAfterPipe[MAX_LEN_COMMAND];
-	int j = i;
-	for (; args[j] != NULL; j++){
+	int j = i + 1;
+	for (; args[j] != NULL; j++) {
 		commandAfterPipe[j] = args[j];
 	}
 	commandAfterPipe[j] = NULL;
 
-	int pipeFds[2];
 	signed int pid, wpid;
-	int startLoc;
-
-	int status = pipe(pipeFds);
-	if (status == -1)
-	{
-		perror("pipe failed.\n");
-		return -1;
-	}
 
 	pid = fork();
 	if (pid == -1)
@@ -284,24 +275,49 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 
 	if (pid == 0)
 	{
-		dup2(pipeFds[1], STDOUT_FILENO);
-		close(pipeFds[0]);
+		int pipeFds[2], startLoc;
 
-		status = execvp(new_args[0], new_args);
+		int status = pipe(pipeFds);
 		if (status == -1)
 		{
-			perror("Invalid Command.\n");
-			kill(getpid(), SIGTERM);
+			perror("pipe failed.\n");
+			return -1;
 		}
-		return -1;
+
+		dup2(pipeFds[0], STDIN_FILENO);
+	`	close(pipeFds[1]);
+
+		signed int pId = fork();
+		if (pId == -1) {
+			return -1;
+		}
+		else if (pId == 0)
+		{
+			dup2(pipeFds[1], STDOUT_FILENO);
+			close(pipeFds[0]);
+
+			status = execvp(new_args[0], new_args);
+			close(pipeFds[1])
+		}
+		else
+		{
+			status = execvp(commandAfterPipe[0], commandAfterPipe);
+			if (status == -1)
+			{
+				perror("Invalid Command Before Pipe.\n");
+				kill(getpid(), SIGTERM);
+
+				return -1;
+			}
+			close(pipeFds[0])
+
+			do {
+				wpid = waitpid(pid, &startLoc, WUNTRACED);
+			} while (!WIFEXITED(startLoc) & !WIFSIGNALED(startLoc));
+		}
 	}
 	else
 	{
-		dup2(pipeFds[0], STDIN_FILENO);
-		close(pipeFds[1]);
-
-		status = execvp(commandAfterPipe[0], commandAfterPipe);
-
 		if (runBackground == 0)
 		{
 			do {
@@ -399,8 +415,6 @@ int execute(char **args, int latestCommandExist, char **latestCommand)
 				return -1;
 			}
 
-
-
 			outputRedirect(new_args, args[i + 1], runBackground);
 			return 1;
 		}
@@ -417,19 +431,16 @@ int execute(char **args, int latestCommandExist, char **latestCommand)
 				return -1;
 			}
 
-			if (strcmp(args[i + 2], "&") == 0) {
-				runBackground = 1;
-			}
 
 			inputRedirect(new_args, args[i + 1], runBackground);
 			return 1;
 		}
 		else if (strcmp(args[i], "|") == 0)
 		{
-			if (strcmp(args[i+2], "&") == 0) {
-				runBackground = 1;
-			}
-			executePipe(args, new_args, i, runBackground);
+			//if (strcmp(args[i+2], "&") == 0) {
+				//runBackground = 1;
+			//}
+			return executePipe(args, new_args, i, runBackground);
 		}
 
 		i++;
@@ -453,7 +464,7 @@ void mainLoop()
 
 	int latestCommandExist = 0;
 	char **latestCommand = (char**)malloc(TOKEN_SIZE * sizeof(char*));
-
+	//char *latestCommand[MAX_LEN_COMMAND];
 	do
 	{
 		printf("Type help if you need any helps.\n");
@@ -468,8 +479,8 @@ void mainLoop()
 		if (args[0] != NULL)
 		{
 			for (; args[i] != NULL; i++) {
-				//latestCommand[i] = args[i];
-				strcpy(latestCommand[i], args[i]);
+				latestCommand[i] = args[i];
+				//strcpy(latestCommand[i], args[i]);
 			}
 			latestCommand[i] = NULL;
 
