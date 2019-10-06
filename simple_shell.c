@@ -284,32 +284,39 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 			return -1;
 		}
 
-		dup2(pipeFds[0], STDIN_FILENO);
-	`	close(pipeFds[1]);
-
 		signed int pId = fork();
 		if (pId == -1) {
 			return -1;
 		}
 		else if (pId == 0)
 		{
-			dup2(pipeFds[1], STDOUT_FILENO);
-			close(pipeFds[0]);
+			close(pipeFds[1]);
+			dup2(pipeFds[0], 0);
 
-			status = execvp(new_args[0], new_args);
-			close(pipeFds[1])
-		}
-		else
-		{
 			status = execvp(commandAfterPipe[0], commandAfterPipe);
 			if (status == -1)
 			{
-				perror("Invalid Command Before Pipe.\n");
+				perror("Invalid Command After Pipe.\n");
 				kill(getpid(), SIGTERM);
 
 				return -1;
 			}
 			close(pipeFds[0])
+		}
+		else
+		{
+			close(pipeFds[0]);
+			dup2(pipeFds[1], 1);
+
+			status = execvp(new_args[0], new_args);
+			if (status == -1)
+			{
+				perror("Invalid Before After Pipe.\n");
+				kill(getpid(), SIGTERM);
+
+				return -1;
+			}
+			close(pipeFds[1]);
 
 			do {
 				wpid = waitpid(pid, &startLoc, WUNTRACED);
