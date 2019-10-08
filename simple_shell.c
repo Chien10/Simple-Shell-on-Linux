@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define MAX_LEN 1024
 #define TOKEN_SIZE 80
@@ -98,17 +99,31 @@ int launchProgram(char **args, int runBackground)
 		if (status == -1)
 		{
 			perror("Invalid Command.\n");
+
+			sleep(5);
 			kill(getpid(), SIGTERM);
+
+			exit(EXIT_FAILURE);
 		}
+
+		// In case it finished before the parent calls wait()
+		sleep(10);
+		exit(EXIT_SUCCESS);
+	}
+	else if (pid < 0)
+	{
+		perror("forking Failed.\n");
 		exit(EXIT_FAILURE);
 	}
-	else if (pid < 0) {
-		perror("forking Failed.\n");
-	}
-
-	if (runBackground == 0)
+	else
 	{
-		do {
+		// When a child process exits, the OS deallocates its resources yet leaves the
+		// exit status remain in the PCB. PCB can only be deallocated if the parent proces
+		// does wait on the child
+		// The child process could 'die' before its parent waits sometimes
+		if (runBackground == 0)
+		{
+			time_t t;
 			// If the command doesn't end with &, the parent process will wait
 			// waitpid waits for a process's state to change
 			// Here, I wait until the parent or the child process exited or killed
@@ -116,16 +131,38 @@ int launchProgram(char **args, int runBackground)
 			// More about waitpid: https://linux.die.net/man/3/waitpid, https://www.ibm.com/support/knowledgecenter/en/SSLTBW_2.2.0/com.ibm.zos.v2r2.bpxbd00/rtwaip.htm
 			// https://linux.die.net/man/2/waitpid
 			// Actually, returned value of waitpid will be stored in startLoc
-			wpid = waitpid(pid, &startLoc, WUNTRACED);
-		} while (!WIFEXITED(startLoc) & !WIFSIGNALED(startLoc));
-		/*
-		WIFEXISTED returns non-zero value if the child process terminated normally with exit function
-		WIFSIGNALED returns non-zero value if the child process terminated 'cause it received a signal which
-					was not handled. More about signal: https://www.gnu.org/software/libc/manual/html_node/Signal-Handling.html#Signal-Handling
-		*/
-	}
+			do 
+			{
+				wpid = waitpid(pid, &statLoc, WNOHANG);
+				if (wpid == -1) {
+					perror("wait() failed");
+				}
+				else if (wpid == 0)
+				{
+					time(&t);
+					printf("Child process is still running at %s", ctime(&t));
+					sleep(2);
+				}
+				else
+				{
+					if (WIFEXISTED(startLoc)) {
+						printf("Child proces terminated with status of %d\n", WEXITSTATUS(startLoc));
+					}
+					else {
+						puts("Child process not exited successfully");
+					}
+				}
+			} while(wpid == 0);
+			/*
+			WIFEXISTED returns non-zero value if the child process terminated normally with exit function
+			WIFSIGNALED returns non-zero value if the child process terminated 'cause it received a signal which
+						was not handled. 
+			More about signal: https://www.gnu.org/software/libc/manual/html_node/Signal-Handling.html#Signal-Handling
+			*/
+		}
 
-	return 1;
+		exit(EXIT_SUCCESS);
+	}
 }
 
 // Built-in commands for the shell
@@ -164,13 +201,14 @@ void outputRedirect(char *args[], char *outputFile, int runBackground)
 	if (pid == 0)
 	{
 		// https://linux.die.net/man/3/open
-		//
 		mode_t mode = S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR;
 		fd = open(outputFile, O_CREAT | O_TRUNC | O_RDWR, mode);
 		if (fd < 0)
 		{
 			perror("open file for output redirection failed.");
 			kill(getpid(), SIGTERM);
+
+			exit(EXIT_FAILURE);
 		}
 		else
 		{
@@ -183,17 +221,44 @@ void outputRedirect(char *args[], char *outputFile, int runBackground)
 				perror("Invalid command.\n");
 				// A gentleman way to kill a process
 				kill(getpid(), SIGTERM);
+
+				sleep(5);
+				exit(EXIT_FAILURE);
 			}
+
+			sleep(10);
+			exit(EXIT_SUCCESS);
 		}
 	}
 
 	if (runBackground == 0)
 	{
-		do {
-			// Or waitpid(pid, NULL, 0) since start_loc is NULL, waitpid waits without caring about the child's return values
-			wpid = waitpid(pid, &startLoc, WUNTRACED);
-		} while (!WIFEXITED(startLoc) & !WIFSIGNALED(startLoc));
+		time_t t;
+		do
+		{
+			wpid = waitpid(pid, &statLoc, WNOHANG);
+			if (wpid == -1) {
+				perror("wait() failed");
+			}
+			else if (wpid == 0)
+			{
+				time(&t);
+				printf("Child process is still running at %s", ctime(&t));
+				sleep(2);
+			}
+			else
+			{
+				if (WIFEXISTED(startLoc)) {
+					printf("Child proces terminated with status of %d\n", WEXITSTATUS(startLoc));
+				}	
+				else {
+					puts("Child process not exited successfully");
+				}
+			}
+		} while(wpid == 0);
 	}
+
+	exit(EXIT_SUCCESS);
 }
 
 void inputRedirect(char *args[], char *inputFile, int runBackground)
@@ -222,17 +287,44 @@ void inputRedirect(char *args[], char *inputFile, int runBackground)
 				perror("Invalid command.\n");
 				// A gentleman way to kill a process
 				kill(getpid(), SIGTERM);
+
+				sleep(5);
+				exit(EXIT_FAILURE);
 			}
+
+			sleep(10);
+			exit(EXIT_SUCCESS);
 		}
 	}
 
 	if (runBackground == 0)
 	{
-		do {
-			// Or waitpid(pid, NULL, 0);
-			wpid = waitpid(pid, &startLoc, WUNTRACED);
-		} while (!WIFEXITED(startLoc) & !WIFSIGNALED(startLoc));
+		time_t t;
+		do
+		{
+			wpid = waitpid(pid, &statLoc, WNOHANG);
+			if (wpid == -1) {
+				perror("wait() failed");
+			}
+			else if (wpid == 0)
+			{
+				time(&t);
+				printf("Child process is still running at %s", ctime(&t));
+				sleep(2);
+			}
+			else
+			{
+				if (WIFEXISTED(startLoc)) {
+					printf("Child proces terminated with status of %d\n", WEXITSTATUS(startLoc));
+				}
+				else {
+					puts("Child process not exited successfully");
+				}
+			}
+		} while(wpid == 0);
 	}
+
+	exit(EXIT_SUCCESS);
 }
 
 int runDefaultUtils(char **args)
@@ -257,12 +349,16 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 
 	char *commandAfterPipe[MAX_LEN_COMMAND];
 	int j = i + 1;
-	for (; args[j] != NULL; j++) {
-		commandAfterPipe[j] = args[j];
+	int t = 0;
+	for (; args[j] != NULL; j++)
+	{
+		commandAfterPipe[t] = args[j];
+		t++;
 	}
-	commandAfterPipe[j] = NULL;
+	commandAfterPipe[t] = NULL;
 
 	signed int pid, wpid;
+	int startLoc;
 
 	pid = fork();
 	if (pid == -1)
@@ -275,7 +371,7 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 
 	if (pid == 0)
 	{
-		int pipeFds[2], startLoc;
+		int pipeFds[2];
 
 		int status = pipe(pipeFds);
 		if (status == -1)
@@ -301,7 +397,8 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 
 				return -1;
 			}
-			close(pipeFds[0])
+
+			close(pipeFds[0]);
 		}
 		else
 		{
@@ -316,11 +413,10 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 
 				return -1;
 			}
+
 			close(pipeFds[1]);
 
-			do {
-				wpid = waitpid(pid, &startLoc, WUNTRACED);
-			} while (!WIFEXITED(startLoc) & !WIFSIGNALED(startLoc));
+			exit(EXIT_SUCCESS);
 		}
 	}
 	else
@@ -346,6 +442,16 @@ void echoCommandToScreen(char **latestCommand)
 				printf("%s ", latestCommand[j]);
 		}
 	}
+}
+
+int argslen(char ** args)
+{
+	int len = 0;
+	for (int i = 0; args[i] != 0; i++) {
+		len++;
+	}
+
+	return len;
 }
 
 int execute(char **args, int latestCommandExist, char **latestCommand)
@@ -444,9 +550,13 @@ int execute(char **args, int latestCommandExist, char **latestCommand)
 		}
 		else if (strcmp(args[i], "|") == 0)
 		{
-			//if (strcmp(args[i+2], "&") == 0) {
-				//runBackground = 1;
-			//}
+			int argsLen = argslen(args);
+			if (strcmp(args[argsLen - 1], "&") == 0)
+			{
+				runBackground = 1;
+				args[argsLen - 1] = NULL;
+			}
+
 			return executePipe(args, new_args, i, runBackground);
 		}
 
@@ -455,7 +565,6 @@ int execute(char **args, int latestCommandExist, char **latestCommand)
 
 	return launchProgram(new_args, runBackground);
 }
-
 
 void mainLoop()
 {
@@ -476,6 +585,7 @@ void mainLoop()
 	{
 		printf("Type help if you need any helps.\n");
 		printf("> ");
+		fflush(stdout);
 
 		line = readLine();
 		args = splitLine(line);
