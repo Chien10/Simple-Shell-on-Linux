@@ -580,6 +580,9 @@ void mainLoop()
 
 	int latestCommandExist = 0;
 	char **latestCommand = (char**)malloc(TOKEN_SIZE * sizeof(char*));
+	for (int t = 0; t < TOKEN_SIZE; t++) {
+		latestCommand[t] = (char*)malloc(TOKEN_SIZE * sizeof(char));
+	}
 	//char *latestCommand[MAX_LEN_COMMAND];
 	do
 	{
@@ -592,14 +595,13 @@ void mainLoop()
 		shouldRun = execute(args, latestCommandExist, latestCommand);
 
 		// Only update latestCommand with the executed command
-		int i = 0;
+		int i = 0, len;
 		if (args[0] != NULL)
 		{
 			for (; args[i] != NULL; i++) {
-				latestCommand[i] = args[i];
-				//strcpy(latestCommand[i], args[i]);
+				len = strlen(args[i]);
+				strncpy(latestCommand[i], args[i], len);
 			}
-			latestCommand[i] = NULL;
 
 			latestCommandExist = 1;
 		}
@@ -610,6 +612,9 @@ void mainLoop()
 	} while(shouldRun);
 
 	free(latestCommand);
+	for (int t = 0; t < TOKEN_SIZE; t++) {
+		free(latestCommand[t]);
+	}
 }
 
 int main(int argc, char **argv)
