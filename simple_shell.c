@@ -100,14 +100,14 @@ int launchProgram(char **args, int runBackground)
 		{
 			perror("Invalid Command.\n");
 
-			sleep(5);
+			sleep(1);
 			kill(getpid(), SIGTERM);
 
 			exit(EXIT_FAILURE);
 		}
 
 		// In case it finished before the parent calls wait()
-		sleep(10);
+		sleep(.5);
 		exit(EXIT_SUCCESS);
 	}
 	else if (pid < 0)
@@ -131,37 +131,37 @@ int launchProgram(char **args, int runBackground)
 			// More about waitpid: https://linux.die.net/man/3/waitpid, https://www.ibm.com/support/knowledgecenter/en/SSLTBW_2.2.0/com.ibm.zos.v2r2.bpxbd00/rtwaip.htm
 			// https://linux.die.net/man/2/waitpid
 			// Actually, returned value of waitpid will be stored in startLoc
-			do 
+			do
 			{
-				wpid = waitpid(pid, &statLoc, WNOHANG);
+				wpid = waitpid(pid, &startLoc, WNOHANG);
 				if (wpid == -1) {
 					perror("wait() failed");
 				}
 				else if (wpid == 0)
 				{
 					time(&t);
-					printf("Child process is still running at %s", ctime(&t));
-					sleep(2);
+					//printf("Child process is still running at %s", ctime(&t));
+					sleep(0.5);
 				}
 				else
 				{
-					if (WIFEXISTED(startLoc)) {
-						printf("Child proces terminated with status of %d\n", WEXITSTATUS(startLoc));
+					if (WIFEXITED(startLoc)) {
+						//printf("Child proces terminated with status of %d\n", WEXITSTATUS(startLoc));
 					}
 					else {
-						puts("Child process not exited successfully");
+						//puts("Child process not exited successfully");
 					}
 				}
 			} while(wpid == 0);
 			/*
 			WIFEXISTED returns non-zero value if the child process terminated normally with exit function
 			WIFSIGNALED returns non-zero value if the child process terminated 'cause it received a signal which
-						was not handled. 
+						was not handled.
 			More about signal: https://www.gnu.org/software/libc/manual/html_node/Signal-Handling.html#Signal-Handling
 			*/
 		}
 
-		exit(EXIT_SUCCESS);
+		return 1;
 	}
 }
 
@@ -222,11 +222,11 @@ void outputRedirect(char *args[], char *outputFile, int runBackground)
 				// A gentleman way to kill a process
 				kill(getpid(), SIGTERM);
 
-				sleep(5);
+				sleep(.5);
 				exit(EXIT_FAILURE);
 			}
 
-			sleep(10);
+			sleep(.5);
 			exit(EXIT_SUCCESS);
 		}
 	}
@@ -236,29 +236,29 @@ void outputRedirect(char *args[], char *outputFile, int runBackground)
 		time_t t;
 		do
 		{
-			wpid = waitpid(pid, &statLoc, WNOHANG);
+			wpid = waitpid(pid, &startLoc, WNOHANG);
 			if (wpid == -1) {
 				perror("wait() failed");
 			}
 			else if (wpid == 0)
 			{
 				time(&t);
-				printf("Child process is still running at %s", ctime(&t));
-				sleep(2);
+				//printf("Child process is still running at %s", ctime(&t));
+				sleep(.5);
 			}
 			else
 			{
-				if (WIFEXISTED(startLoc)) {
-					printf("Child proces terminated with status of %d\n", WEXITSTATUS(startLoc));
-				}	
+				if (WIFEXITED(startLoc)) {
+					//printf("Child proces terminated with status of %d\n", WEXITSTATUS(startLoc));
+				}
 				else {
-					puts("Child process not exited successfully");
+					//puts("Child process not exited successfully");
 				}
 			}
 		} while(wpid == 0);
 	}
 
-	exit(EXIT_SUCCESS);
+	wait(NULL);
 }
 
 void inputRedirect(char *args[], char *inputFile, int runBackground)
@@ -288,11 +288,11 @@ void inputRedirect(char *args[], char *inputFile, int runBackground)
 				// A gentleman way to kill a process
 				kill(getpid(), SIGTERM);
 
-				sleep(5);
+				sleep(.5);
 				exit(EXIT_FAILURE);
 			}
 
-			sleep(10);
+			sleep(0.5);
 			exit(EXIT_SUCCESS);
 		}
 	}
@@ -302,20 +302,20 @@ void inputRedirect(char *args[], char *inputFile, int runBackground)
 		time_t t;
 		do
 		{
-			wpid = waitpid(pid, &statLoc, WNOHANG);
+			wpid = waitpid(pid, &startLoc, WNOHANG);
 			if (wpid == -1) {
 				perror("wait() failed");
 			}
 			else if (wpid == 0)
 			{
 				time(&t);
-				printf("Child process is still running at %s", ctime(&t));
-				sleep(2);
+				//printf("Child process is still running at %s", ctime(&t));
+				sleep(.5);
 			}
 			else
 			{
-				if (WIFEXISTED(startLoc)) {
-					printf("Child proces terminated with status of %d\n", WEXITSTATUS(startLoc));
+				if (WIFEXITED(startLoc)) {
+					//printf("Child proces terminated with status of %d\n", WEXITSTATUS(startLoc));
 				}
 				else {
 					puts("Child process not exited successfully");
@@ -324,7 +324,7 @@ void inputRedirect(char *args[], char *inputFile, int runBackground)
 		} while(wpid == 0);
 	}
 
-	exit(EXIT_SUCCESS);
+	wait(NULL);
 }
 
 int runDefaultUtils(char **args)
@@ -423,25 +423,49 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 	{
 		if (runBackground == 0)
 		{
-			do {
-				wpid = waitpid(pid, &startLoc, WUNTRACED);
-			} while (!WIFEXITED(startLoc) & !WIFSIGNALED(startLoc));
+			time_t t;
+			do
+			{
+				wpid = waitpid(pid, &startLoc, WNOHANG);
+				if (wpid == -1) {
+					perror("wait() failed");
+				}
+				else if (wpid == 0)
+				{
+					time(&t);
+					//printf("Child process is still running at %s", ctime(&t));
+					sleep(.5);
+				}
+				else
+				{
+					if (WIFEXITED(startLoc)) {
+						//printf("Child proces terminated with status of %d\n", WEXITSTATUS(startLoc));
+					}
+					else {
+						//puts("Child process not exited successfully");
+					}
+				}
+			} while(wpid == 0);
 		}
+
+		wait(NULL);
 	}
 
 	return 1;
 }
 
-void echoCommandToScreen(char **latestCommand)
+char *getLatestCommand(int latestCommandLen)
 {
-	for (int j = 0; latestCommand[j] != NULL; j++) {
-		if (latestCommand[j + 1] == NULL) {
-			printf("%s", latestCommand[j]);
-		}
-		else {
-				printf("%s ", latestCommand[j]);
-		}
-	}
+	int fd = open("history", O_CREAT | O_RDWR,
+						S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
+	char *buffer = (char*)malloc((latestCommandLen + 1) * sizeof(char));
+
+	read(fd, buffer, latestCommandLen);
+	buffer[latestCommandLen] = '\0';
+
+	close(fd);
+
+	return buffer;
 }
 
 int argslen(char ** args)
@@ -454,7 +478,7 @@ int argslen(char ** args)
 	return len;
 }
 
-int execute(char **args, int latestCommandExist, char **latestCommand)
+int execute(char **args, int latestCommandExist, int latestCommandLen)
 {
 	int i = 0, runBackground = 0;
 
@@ -500,16 +524,15 @@ int execute(char **args, int latestCommandExist, char **latestCommand)
 			else
 			{
 				// Echo the latest command on the shell's screen
-				echoCommandToScreen(latestCommand);
+				char *echoCommand = echoCommandToScreen(latestCommandLen);
+				printf("%s\n", echoCommand);
 
-				for (int i = 0; args[i] != NULL; i++) {
-					//latestCommand[i] = args[i];
-					strcpy(latestCommand[i], args[i]);
-				}
-				latestCommand[i] = NULL;
+				char **latestCommand = splitLine(echoCommand);
 
-				// This function will terminate, don't worry!
-				execute(args, latestCommandExist, latestCommand);
+				execute(latestCommand, latestCommandExist, latestCommandLen);
+
+				free(echoCommand);
+				free(latestCommand)
 			}
 		}
 		else if ((strcmp(args[i], "&") == 0) && (i == commandSize - 1)) {
@@ -579,42 +602,37 @@ void mainLoop()
 	int shouldRun;
 
 	int latestCommandExist = 0;
-	char **latestCommand = (char**)malloc(TOKEN_SIZE * sizeof(char*));
-	for (int t = 0; t < TOKEN_SIZE; t++) {
-		latestCommand[t] = (char*)malloc(TOKEN_SIZE * sizeof(char));
-	}
-	//char *latestCommand[MAX_LEN_COMMAND];
+	int latestCommandLen = 0;
+	int fd;
+	fd = open("history", O_CREAT | O_RDWR,
+						S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
+	close(fd);
+
 	do
 	{
-		printf("Type help if you need any helps.\n");
-		printf("> ");
-		fflush(stdout);
+		puts("Type help if you need any helps.\n");
+		puts("> ");
 
 		line = readLine();
-		args = splitLine(line);
-		shouldRun = execute(args, latestCommandExist, latestCommand);
-
-		// Only update latestCommand with the executed command
-		int i = 0, len;
-		if (args[0] != NULL)
+		latestCommandLen = strlen(line);
+		if (strcmp(line[0], "\n") != 0) 
 		{
-			for (; args[i] != NULL; i++) {
-				len = strlen(args[i]);
-				strncpy(latestCommand[i], args[i], len);
-			}
+			fd = open("history", O_CREAT | O_TRUNC | O_RDWR,
+								S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
+			write(fd, line, latestCommandLen);
+			close(fd);
 
 			latestCommandExist = 1;
 		}
+
+		args = splitLine(line);
+		
+		shouldRun = execute(args, latestCommandExist, latestCommandLen);
 
 		free(line);
 		free(args);
 
 	} while(shouldRun);
-
-	free(latestCommand);
-	for (int t = 0; t < TOKEN_SIZE; t++) {
-		free(latestCommand[t]);
-	}
 }
 
 int main(int argc, char **argv)
