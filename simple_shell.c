@@ -13,6 +13,16 @@
 #define TOKEN_DELIM " \t\r\n\a"
 #define MAX_LEN_COMMAND 5
 
+int argslen(char ** args)
+{
+	int len = 0;
+	for (int i = 0; args[i] != 0; i++) {
+		len++;
+	}
+
+	return len;
+}
+
 /*
 	Read user's command
 	Return:
@@ -77,7 +87,7 @@ int launchProgram(char **args, int runBackground)
 	signed int pid, wpid; // pid is process ID
 	int status = 0;
 	int startLoc;
-
+	printf("Enter launchProgram with: %s\n", args[0]);
 	pid = fork();
 	// The parent process will return 0 to its child one if the children takes the first
 	// In other words, fork() will clone the parent program and the child process will
@@ -197,6 +207,15 @@ void outputRedirect(char *args[], char *outputFile, int runBackground)
 	signed int pid, wpid;
 	int startLoc;
 
+	printf("Command before output redirection: ");
+	for(int t=0; args[t]!=NULL; t++) {
+		printf("%s", args[t]);
+	}
+	printf("\n");
+
+	printf("File to open: ");
+	printf("%s\n", outputFile);
+
 	pid = fork();
 	if (pid == 0)
 	{
@@ -215,10 +234,15 @@ void outputRedirect(char *args[], char *outputFile, int runBackground)
 			dup2(fd, STDOUT_FILENO);
 			close(fd);
 
+			char cwd[40];
+			if (getcwd(cwd, sizeof cwd) != NULL) {
+				printf("Current working directory of process: %s", cwd);
+			}
+
 			status = execvp(args[0], args);
 			if (status == -1)
 			{
-				perror("Invalid command.\n");
+				perror("Invalid command before output redirection.\n");
 				// A gentleman way to kill a process
 				kill(getpid(), SIGTERM);
 
@@ -255,7 +279,7 @@ void outputRedirect(char *args[], char *outputFile, int runBackground)
 					//puts("Child process not exited successfully");
 				}
 			}
-		} while(wpid == 0);
+		} while (wpid == 0);
 	}
 
 	wait(NULL);
@@ -456,26 +480,15 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 
 char *getLatestCommand(int latestCommandLen)
 {
-	int fd = open("history", O_CREAT | O_RDWR,
+	char *buffer = (char*)malloc(latestCommandLen * sizeof(char));
+	int fd = open("history", O_RDWR,
 						S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
-	char *buffer = (char*)malloc((latestCommandLen + 1) * sizeof(char));
-
 	read(fd, buffer, latestCommandLen);
-	buffer[latestCommandLen] = '\0';
-
 	close(fd);
+	printf("Command read from file: %s", buffer);
+	printf(", with length of: %d", strlen(buffer));
 
 	return buffer;
-}
-
-int argslen(char ** args)
-{
-	int len = 0;
-	for (int i = 0; args[i] != 0; i++) {
-		len++;
-	}
-
-	return len;
 }
 
 int execute(char **args, int latestCommandExist, int latestCommandLen)
@@ -499,7 +512,8 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 	}
 
 	// Otherwise
-	char *new_args[MAX_LEN_COMMAND];
+	char *new_args[MAX_LEN_COMMAND * 2];
+	printf("new_args: ");
 	for (i = 0; args[i] != NULL; i++)
 	{
 		if (strcmp(args[i], ">") == 0 || strcmp(args[i], "<") == 0 ||
@@ -508,8 +522,10 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 		}
 
 		new_args[i] = args[i];
+		printf("%s", new_args[i]);
 	}
 	new_args[i] = NULL;
+	printf("\n");
 
 	i = 0;
 	while (args[i] != NULL && runBackground == 0)
@@ -524,15 +540,23 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 			else
 			{
 				// Echo the latest command on the shell's screen
-				char *echoCommand = echoCommandToScreen(latestCommandLen);
+				char *echoCommand = getLatestCommand(latestCommandLen);
 				printf("%s\n", echoCommand);
 
 				char **latestCommand = splitLine(echoCommand);
+				printf("After slitting: ");
+				for(int t=0; latestCommand[t] != NULL; t++) {
+					printf("latestCommand[%d]: %s", t, latestCommand[t]);
+					printf(" ");
+				}
+				printf("\n");
 
 				execute(latestCommand, latestCommandExist, latestCommandLen);
 
 				free(echoCommand);
-				free(latestCommand)
+				free(latestCommand);
+
+				return 1;
 			}
 		}
 		else if ((strcmp(args[i], "&") == 0) && (i == commandSize - 1)) {
@@ -567,7 +591,6 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 				return -1;
 			}
 
-
 			inputRedirect(new_args, args[i + 1], runBackground);
 			return 1;
 		}
@@ -598,6 +621,7 @@ void mainLoop()
 		3. Execute
 	*/
 	char *line;
+	char *tempLine;
 	char **args;
 	int shouldRun;
 
@@ -610,26 +634,47 @@ void mainLoop()
 
 	do
 	{
-		puts("Type help if you need any helps.\n");
-		puts("> ");
+		puts("Type help if you need any helps.");
+		fputs("> ", stdout);
 
 		line = readLine();
-		latestCommandLen = strlen(line);
-		if (strcmp(line[0], "\n") != 0) 
+		int lineLen = strlen(line);
+		printf("line: ");
+		for(int i=0;line[i] != '\0'; i++) {
+			printf("%c", line[i]);
+		}
+		printf("\n");
+
+		tempLine = (char*)malloc((strlen(line) + 1)* sizeof(char));
+		strncpy(tempLine, line, (strlen(line) + 1) * sizeof(char));
+		printf("tempLine replicated from line: %s\n", tempLine);
+
+		args = splitLine(line);
+
+		shouldRun = execute(args, latestCommandExist, latestCommandLen);
+
+		// Save command that was executed
+		latestCommandLen = strlen(tempLine);
+		printf("tempLine: ");
+		for(int i=0;tempLine[i] != '\0'; i++) {
+			printf("%c", tempLine[i]);
+		}
+		printf("\n");
+
+		printf("\n");
+		printf("Is latestCommandLen equal strlen(line): %d, %d\n", latestCommandLen, lineLen);
+		if ( (args[0] != NULL) && (strcmp(args[0], "!!") != 0) )
 		{
 			fd = open("history", O_CREAT | O_TRUNC | O_RDWR,
 								S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
-			write(fd, line, latestCommandLen);
+			write(fd, tempLine, latestCommandLen);
 			close(fd);
 
 			latestCommandExist = 1;
 		}
 
-		args = splitLine(line);
-		
-		shouldRun = execute(args, latestCommandExist, latestCommandLen);
-
 		free(line);
+		free(tempLine);
 		free(args);
 
 	} while(shouldRun);
