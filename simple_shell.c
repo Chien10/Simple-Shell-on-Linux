@@ -13,6 +13,14 @@
 #define TOKEN_DELIM " \t\r\n\a"
 #define MAX_LEN_COMMAND 5
 
+
+/*
+	Compute length of a 2 pointer array
+	Arguments:
+				char **args: a 2 pointer array
+	Return:
+				int len: the lenght of the array
+*/
 int argslen(char ** args)
 {
 	int len = 0;
@@ -24,7 +32,7 @@ int argslen(char ** args)
 }
 
 /*
-	Read user's command
+	Read user's command from keyboard
 	Return:
 			char *userCommand: a pointer to an array containing the input
 */
@@ -39,7 +47,7 @@ char *readLine()
 }
 
 /*
-	Parse the command of user
+	Parse the command of user to eliminate redundant characters
 	Argument:
 				char *userCommand: a pointer points to stored user's command (returned value of readLine())
 	Return:
@@ -82,12 +90,20 @@ char **splitLine(char *userCommand)
 	return tokens;
 }
 
+/*
+	Call system functions to execute input command
+	Arguments:
+				char **args: return value of splitLine()
+				int runBackground: indicates whether the child process running in background
+	Return:
+				1
+*/
 int launchProgram(char **args, int runBackground)
 {
 	signed int pid, wpid; // pid is process ID
 	int status = 0;
 	int startLoc;
-	printf("Enter launchProgram with: %s\n", args[0]);
+	//printf("Enter launchProgram with: %s\n", args[0]);
 	pid = fork();
 	// The parent process will return 0 to its child one if the children takes the first
 	// In other words, fork() will clone the parent program and the child process will
@@ -162,7 +178,7 @@ int launchProgram(char **args, int runBackground)
 						//puts("Child process not exited successfully");
 					}
 				}
-			} while(wpid == 0);
+			} while (wpid == 0);
 			/*
 			WIFEXISTED returns non-zero value if the child process terminated normally with exit function
 			WIFSIGNALED returns non-zero value if the child process terminated 'cause it received a signal which
@@ -176,6 +192,10 @@ int launchProgram(char **args, int runBackground)
 }
 
 // Built-in commands for the shell
+
+/*
+	Print utilities of this shell
+*/
 int help(char **args)
 {
 	int i;
@@ -191,30 +211,44 @@ int help(char **args)
 	return 1;
 }
 
+/*
+	Exit the shell
+*/
 int quit(char **args) {
 	return 0;
 }
 
 char *builtinCommands[] = {"help", "exit"};
 int (*builtinFunctions[]) (char**) = {&help, &quit};
+
+/*
+	Return the number of built-in functions
+*/
 int numBuiltins() {
 	return sizeof builtinCommands / sizeof(char *);
 }
 
+/*
+	Perform output redirection
+	Arguments:
+				char *args[]: the part before '>'
+				char *outputFile: the name of the file 
+				int runBackground: indication of running in background or foreground
+*/
 void outputRedirect(char *args[], char *outputFile, int runBackground)
 {
 	int fd, status;
 	signed int pid, wpid;
 	int startLoc;
 
-	printf("Command before output redirection: ");
+	/*printf("Command before output redirection: ");
 	for(int t=0; args[t]!=NULL; t++) {
 		printf("%s", args[t]);
 	}
 	printf("\n");
 
 	printf("File to open: ");
-	printf("%s\n", outputFile);
+	printf("%s\n", outputFile);*/
 
 	pid = fork();
 	if (pid == 0)
@@ -285,6 +319,13 @@ void outputRedirect(char *args[], char *outputFile, int runBackground)
 	wait(NULL);
 }
 
+/*
+	Perform output redirection
+	Arguments:
+				char *args[]: the characters before '<'
+				char *outputFile: the name of the file 
+				int runBackground: indication of child process running in background or foreground
+*/
 void inputRedirect(char *args[], char *inputFile, int runBackground)
 {
 	int fd, status;
@@ -351,6 +392,9 @@ void inputRedirect(char *args[], char *inputFile, int runBackground)
 	wait(NULL);
 }
 
+/*
+	Execute built-in functions
+*/
 int runDefaultUtils(char **args)
 {
 	for (int i = 0; i < numBuiltins(); i++)
@@ -363,6 +407,14 @@ int runDefaultUtils(char **args)
 	return -1;
 }
 
+/*
+	Execute command when pipe is introduced
+	Arguments:
+				char **args: value returned from splitLine()
+				char **new_args: characters before '|'
+				int i: position of '|' in value returned from splitLine()
+				int runBackground: child process running background (or not)
+*/
 int executePipe(char **args, char **new_args, int i, int runBackground)
 {
 	if (args[i + 1] == NULL)
@@ -478,6 +530,11 @@ int executePipe(char **args, char **new_args, int i, int runBackground)
 	return 1;
 }
 
+/*
+	Read latest command saved in 'history' file
+	Argument:
+				int latestCommandLen: length of the saved command (without preprocessing)
+*/
 char *getLatestCommand(int latestCommandLen)
 {
 	char *buffer = (char*)malloc(latestCommandLen * sizeof(char));
@@ -485,12 +542,19 @@ char *getLatestCommand(int latestCommandLen)
 						S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
 	read(fd, buffer, latestCommandLen);
 	close(fd);
-	printf("Command read from file: %s", buffer);
-	printf(", with length of: %d", strlen(buffer));
+	//printf("Command read from file: %s", buffer);
+	//printf(", with length of: %d", strlen(buffer));
 
 	return buffer;
 }
 
+/*
+	Main function that execute command from keyboard
+	Arguments:
+				char **args: value returned by splitLine()
+				int latestCommandExist: whether lastest command exists
+				int latestCommandLen: length of the latest command
+*/
 int execute(char **args, int latestCommandExist, int latestCommandLen)
 {
 	int i = 0, runBackground = 0;
@@ -513,7 +577,7 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 
 	// Otherwise
 	char *new_args[MAX_LEN_COMMAND * 2];
-	printf("new_args: ");
+	//printf("new_args: ");
 	for (i = 0; args[i] != NULL; i++)
 	{
 		if (strcmp(args[i], ">") == 0 || strcmp(args[i], "<") == 0 ||
@@ -522,10 +586,10 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 		}
 
 		new_args[i] = args[i];
-		printf("%s", new_args[i]);
+		//printf("%s", new_args[i]);
 	}
 	new_args[i] = NULL;
-	printf("\n");
+	//printf("\n");
 
 	i = 0;
 	while (args[i] != NULL && runBackground == 0)
@@ -544,12 +608,12 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 				printf("%s\n", echoCommand);
 
 				char **latestCommand = splitLine(echoCommand);
-				printf("After slitting: ");
+				/*printf("After slitting: ");
 				for(int t=0; latestCommand[t] != NULL; t++) {
 					printf("latestCommand[%d]: %s", t, latestCommand[t]);
 					printf(" ");
 				}
-				printf("\n");
+				printf("\n");*/
 
 				execute(latestCommand, latestCommandExist, latestCommandLen);
 
@@ -612,6 +676,13 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 	return launchProgram(new_args, runBackground);
 }
 
+
+/*
+	General framework to run shell. Basically, a shelL:
+		1. Read command typed from keyboard
+		2. Parse the command and preprocess it
+		3. Execute the command
+*/
 void mainLoop()
 {
 	/*
@@ -639,15 +710,15 @@ void mainLoop()
 
 		line = readLine();
 		int lineLen = strlen(line);
-		printf("line: ");
+		/*printf("line: ");
 		for(int i=0;line[i] != '\0'; i++) {
 			printf("%c", line[i]);
 		}
-		printf("\n");
+		printf("\n");*/
 
 		tempLine = (char*)malloc((strlen(line) + 1)* sizeof(char));
 		strncpy(tempLine, line, (strlen(line) + 1) * sizeof(char));
-		printf("tempLine replicated from line: %s\n", tempLine);
+		//printf("tempLine replicated from line: %s\n", tempLine);
 
 		args = splitLine(line);
 
@@ -655,14 +726,14 @@ void mainLoop()
 
 		// Save command that was executed
 		latestCommandLen = strlen(tempLine);
-		printf("tempLine: ");
+		/*printf("tempLine: ");
 		for(int i=0;tempLine[i] != '\0'; i++) {
 			printf("%c", tempLine[i]);
 		}
-		printf("\n");
+		printf("\n");*/
 
-		printf("\n");
-		printf("Is latestCommandLen equal strlen(line): %d, %d\n", latestCommandLen, lineLen);
+		//printf("\n");
+		//printf("Is latestCommandLen equal strlen(line): %d, %d\n", latestCommandLen, lineLen);
 		if ( (args[0] != NULL) && (strcmp(args[0], "!!") != 0) )
 		{
 			fd = open("history", O_CREAT | O_TRUNC | O_RDWR,
