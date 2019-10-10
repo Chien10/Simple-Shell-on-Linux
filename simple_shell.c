@@ -558,6 +558,7 @@ char *getLatestCommand(int latestCommandLen)
 int execute(char **args, int latestCommandExist, int latestCommandLen)
 {
 	int i = 0, runBackground = 0;
+	int argsLen = 0;
 
 	int commandSize = 0;
 	for(; args[i] != NULL; i++) {
@@ -639,6 +640,13 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 				return -1;
 			}
 
+			argsLen = argslen(args);
+			if (strcmp(args[argsLen - 1], "&") == 0)
+			{
+				runBackground = 1;
+				args[argsLen - 1] = NULL;
+			}
+
 			outputRedirect(new_args, args[i + 1], runBackground);
 			return 1;
 		}
@@ -655,12 +663,19 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 				return -1;
 			}
 
+			argsLen = argslen(args);
+			if (strcmp(args[argsLen - 1], "&") == 0)
+			{
+				runBackground = 1;
+				args[argsLen - 1] = NULL;
+			}
+
 			inputRedirect(new_args, args[i + 1], runBackground);
 			return 1;
 		}
 		else if (strcmp(args[i], "|") == 0)
 		{
-			int argsLen = argslen(args);
+			argsLen = argslen(args);
 			if (strcmp(args[argsLen - 1], "&") == 0)
 			{
 				runBackground = 1;
@@ -682,14 +697,16 @@ int execute(char **args, int latestCommandExist, int latestCommandLen)
 		1. Read command typed from keyboard
 		2. Parse the command and preprocess it
 		3. Execute the command
+		4. Save latest executed command
 */
 void mainLoop()
 {
 	/*
-	Three basic task of a shell:
+	Four basic task of a shell:
 		1. Read
 		2. Parse
 		3. Execute
+		4. Save
 	*/
 	char *line;
 	char *tempLine;
@@ -708,6 +725,7 @@ void mainLoop()
 		puts("Type help if you need any helps.");
 		fputs("> ", stdout);
 
+		/*	Read */
 		line = readLine();
 		int lineLen = strlen(line);
 		/*printf("line: ");
@@ -720,8 +738,10 @@ void mainLoop()
 		strncpy(tempLine, line, (strlen(line) + 1) * sizeof(char));
 		//printf("tempLine replicated from line: %s\n", tempLine);
 
+		/*	Parse	*/
 		args = splitLine(line);
 
+		/*	Execute	*/
 		shouldRun = execute(args, latestCommandExist, latestCommandLen);
 
 		// Save command that was executed
@@ -734,6 +754,7 @@ void mainLoop()
 
 		//printf("\n");
 		//printf("Is latestCommandLen equal strlen(line): %d, %d\n", latestCommandLen, lineLen);
+		/*	Save	*/
 		if ( (args[0] != NULL) && (strcmp(args[0], "!!") != 0) )
 		{
 			fd = open("history", O_CREAT | O_TRUNC | O_RDWR,
